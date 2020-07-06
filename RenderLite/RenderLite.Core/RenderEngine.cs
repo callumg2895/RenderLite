@@ -29,12 +29,12 @@ namespace RenderLite.Core
 
         private readonly object _lock;
 
-        public RenderEngine(CancellationTokenSource cancellationTokenSource)
+        public RenderEngine(CancellationTokenSource cancellationTokenSource = null)
         {
             ThreadStart render = new ThreadStart(Render);
             ThreadStart input = new ThreadStart(HandleInput);
 
-            _cancellationTokenSource = cancellationTokenSource;
+            _cancellationTokenSource = cancellationTokenSource ?? new CancellationTokenSource();
             _renderThread = new Thread(render);
             _inputThread = new Thread(input);
             _components = new List<Component>();
@@ -70,6 +70,11 @@ namespace RenderLite.Core
                 component.Dispose();
             }
 
+        }
+
+        public CancellationToken GetCancellationToken()
+        {
+            return _cancellationTokenSource.Token;
         }
 
         public void AddComponent(Component component)
