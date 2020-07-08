@@ -10,7 +10,8 @@ namespace RenderLite.Core
         protected readonly CancellationTokenSource _cancellationTokenSource;
         protected readonly RenderEngine _renderEngine;
         protected readonly List<Component> _components;
-        protected readonly Dictionary<ConsoleKey, Action> _keyPressActions;
+        protected readonly Dictionary<ConsoleKey, Action> _focusKeyPressActions;
+        protected readonly Dictionary<ConsoleKey, Action> _selectedKeyPressActions;
         protected readonly object _lock;
 
         protected volatile bool _requiresUpdate;
@@ -25,7 +26,8 @@ namespace RenderLite.Core
             _cancellationTokenSource = new CancellationTokenSource();
             _renderEngine = renderEngine;
             _components = new List<Component>();
-            _keyPressActions = new Dictionary<ConsoleKey, Action>();
+            _focusKeyPressActions = new Dictionary<ConsoleKey, Action>();
+            _selectedKeyPressActions = new Dictionary<ConsoleKey, Action>();
             _lock = new object();
 
             _requiresUpdate = false;
@@ -73,16 +75,30 @@ namespace RenderLite.Core
 
         public abstract void Draw();
 
-        public void OnKeypress(ConsoleKeyInfo keyInfo)
+        public bool OnKeypress(ConsoleKeyInfo keyInfo)
         {
-            if (!_keyPressActions.TryGetValue(keyInfo.Key, out Action action))
+            bool success = true;
+
+            if (!IsSelected)
             {
-                return;
+                success = false;
+            }
+            else if (IsInFocus && _focusKeyPressActions.TryGetValue(keyInfo.Key, out Action focusAction))
+            {
+                focusAction.Invoke();
+            }
+            else if (_selectedKeyPressActions.TryGetValue(keyInfo.Key, out Action selectedAction))
+            {
+                selectedAction.Invoke();
+            }
+            else
+            {
+                success = false;
             }
 
-            action.Invoke();
+            _requiresUpdate = _requiresUpdate || success;
 
-            _requiresUpdate = true;
+            return success;
         }
 
         public void Dispose()

@@ -15,8 +15,9 @@ namespace RenderLite.Core
             Previous,
         }
 
-        private const int _width = 100;
-        private const int _height = 30;
+        public const int WIDTH = 100;
+        public const int HEIGHT = 30;
+
         private const int _targetFramerate = 200;
         private const long _targetFrametimeMilliseconds = 1000 / _targetFramerate;
 
@@ -148,7 +149,7 @@ namespace RenderLite.Core
                     }
                 }
 
-                Console.SetWindowSize(_width, _height);
+                Console.SetWindowSize(WIDTH, HEIGHT);
                 Console.SetCursorPosition(0, 0);
                 Console.ResetColor();
 
@@ -173,10 +174,8 @@ namespace RenderLite.Core
                 var consoleKeyInfo = Console.ReadKey(false);
                 var selectedComponent = GetSelectedComponent();
 
-                if (selectedComponent != null && selectedComponent.IsInFocus)
-                {
-                    selectedComponent.OnKeypress(consoleKeyInfo);
-
+                if (selectedComponent != null && selectedComponent.OnKeypress(consoleKeyInfo))
+                { 
                     continue;
                 }
 
