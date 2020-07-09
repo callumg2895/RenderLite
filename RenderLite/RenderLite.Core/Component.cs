@@ -6,6 +6,8 @@ namespace RenderLite.Core
 {
     public abstract class Component : IDisposable
     {
+        internal volatile bool RequiresUpdate;
+
         protected readonly Thread _updateThread;
         protected readonly CancellationTokenSource _cancellationTokenSource;
         protected readonly RenderEngine _renderEngine;
@@ -14,13 +16,14 @@ namespace RenderLite.Core
         protected readonly Dictionary<ConsoleKey, Action> _selectedKeyPressActions;
         protected readonly object _lock;
 
-        protected volatile bool _requiresUpdate;
         private volatile bool _isSelected;
         private volatile bool _isInFocus;
 
         public Component(RenderEngine renderEngine)
         {
             ThreadStart threadStart = new ThreadStart(Update);
+
+            RequiresUpdate = false;
 
             _updateThread = new Thread(threadStart);
             _cancellationTokenSource = new CancellationTokenSource();
@@ -29,8 +32,6 @@ namespace RenderLite.Core
             _focusKeyPressActions = new Dictionary<ConsoleKey, Action>();
             _selectedKeyPressActions = new Dictionary<ConsoleKey, Action>();
             _lock = new object();
-
-            _requiresUpdate = false;
 
             IsSelectable = false;
             IsSelected = false;
@@ -51,7 +52,7 @@ namespace RenderLite.Core
                 lock (_lock)
                 {
                     _isSelected = value;
-                    _requiresUpdate = true;
+                    RequiresUpdate = true;
                 }
             }
         }
@@ -64,7 +65,7 @@ namespace RenderLite.Core
                 lock (_lock)
                 {
                     _isInFocus = value;
-                    _requiresUpdate = true;
+                    RequiresUpdate = true;
                 }
             }
         }
@@ -77,28 +78,23 @@ namespace RenderLite.Core
 
         public bool OnKeypress(ConsoleKeyInfo keyInfo)
         {
-            bool success = true;
-
             if (!IsSelected)
             {
-                success = false;
-            }
-            else if (IsInFocus && _focusKeyPressActions.TryGetValue(keyInfo.Key, out Action focusAction))
-            {
-                focusAction.Invoke();
-            }
-            else if (_selectedKeyPressActions.TryGetValue(keyInfo.Key, out Action selectedAction))
-            {
-                selectedAction.Invoke();
-            }
-            else
-            {
-                success = false;
+                return false;
             }
 
-            _requiresUpdate = _requiresUpdate || success;
+            var actionsLookup = IsInFocus
+                ? _focusKeyPressActions
+                : _selectedKeyPressActions;
 
-            return success;
+            if (actionsLookup.TryGetValue(keyInfo.Key, out Action action))
+            {
+                action.Invoke();
+                RequiresUpdate = true;
+                return true;
+            }
+
+            return false;
         }
 
         public void Dispose()

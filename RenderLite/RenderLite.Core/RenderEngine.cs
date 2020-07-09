@@ -89,9 +89,9 @@ namespace RenderLite.Core
 
                 _components.Add(component);
                 _componentsHash.Add(component);
-
-                SetSelectedComponent();
             }
+
+            SetSelectedComponent();
         }
 
         public void RemoveComponent(Component component)
@@ -105,29 +105,32 @@ namespace RenderLite.Core
 
                 _components.Remove(component);
                 _componentsHash.Remove(component);
-
-                component.Dispose();
-
-                SetSelectedComponent();
             }
+
+            component.Dispose();
+
+            SetSelectedComponent();
         }
 
         public void ClearComponents()
         {
+            List<Component> tempComponents = null;
+
             lock (_lock)
             {
-                var tempComponents = new List<Component>(_components);
+                tempComponents = new List<Component>(_components);
 
                 _components.Clear();
                 _componentsHash.Clear();
 
-                foreach (var component in tempComponents)
-                {
-                    component.Dispose();
-                }
-
-                SetSelectedComponent();
             }
+
+            foreach (var component in tempComponents)
+            {
+                component.Dispose();
+            }
+
+            SetSelectedComponent();        
         }
 
         private void Render()
@@ -143,10 +146,11 @@ namespace RenderLite.Core
 
                 foreach (var component in tempComponents)
                 {
-                    lock (_lock)
+                    if (component.RequiresUpdate)
                     {
+                        component.RequiresUpdate = false;
                         component.Draw();
-                    }
+                    }          
                 }
 
                 Console.SetWindowSize(WIDTH, HEIGHT);
@@ -205,39 +209,43 @@ namespace RenderLite.Core
 
         private void SetSelectedComponent(ComponentSelection selection = ComponentSelection.None)
         {
+            List<Component> tempComponents = null;
+
             lock (_lock)
             {
-                var tempComponents = new List<Component>(_components);
-                var oldSelected = tempComponents.Where(c => c.IsSelected).FirstOrDefault();
-
-                if (tempComponents.Count == 0)
-                {
-                    return;
-                }
-                else if (oldSelected == null)
-                {
-                    oldSelected = tempComponents.First();
-                }
-
-                int oldIndex = tempComponents.IndexOf(oldSelected);
-                int newIndex = oldIndex + selection switch
-                {
-                    ComponentSelection.None => 0,
-                    ComponentSelection.Next => 1,
-                    ComponentSelection.Previous => -1,
-                    _ => throw new ArgumentException($"Selection {selection} not recognized")
-                };
-
-                if (newIndex != 0)
-                {
-                    newIndex = newIndex > 0
-                        ? newIndex % tempComponents.Count
-                        : newIndex + tempComponents.Count;
-                }
-
-                tempComponents[oldIndex].IsSelected = false;
-                tempComponents[newIndex].IsSelected = true;
+                tempComponents = new List<Component>(_components);
             }
+
+            var oldSelected = tempComponents.Where(c => c.IsSelected).FirstOrDefault();
+
+            if (tempComponents.Count == 0)
+            {
+                return;
+            }
+            else if (oldSelected == null)
+            {
+                oldSelected = tempComponents.First();
+            }
+
+            int oldIndex = tempComponents.IndexOf(oldSelected);
+            int newIndex = oldIndex + selection switch
+            {
+                ComponentSelection.None => 0,
+                ComponentSelection.Next => 1,
+                ComponentSelection.Previous => -1,
+                _ => throw new ArgumentException($"Selection {selection} not recognized")
+            };
+
+            if (newIndex != 0)
+            {
+                newIndex = newIndex > 0
+                    ? newIndex % tempComponents.Count
+                    : newIndex + tempComponents.Count;
+            }
+
+            tempComponents[oldIndex].IsSelected = false;
+            tempComponents[newIndex].IsSelected = true;
+            
         }
 
         private Component GetSelectedComponent()
