@@ -6,11 +6,12 @@ namespace RenderLite.Core
 {
     public abstract class Component : IDisposable
     {
-        internal volatile bool RequiresUpdate;
+        public volatile bool RequiresWindowRefresh;
+        public volatile bool RequiresUpdate;
 
         protected readonly Thread _updateThread;
         protected readonly CancellationTokenSource _cancellationTokenSource;
-        protected readonly RenderEngine _renderEngine;
+        protected readonly Engine _renderEngine;
         protected readonly List<Component> _components;
         protected readonly Dictionary<ConsoleKey, Action> _focusKeyPressActions;
         protected readonly Dictionary<ConsoleKey, Action> _selectedKeyPressActions;
@@ -19,11 +20,9 @@ namespace RenderLite.Core
         private volatile bool _isSelected;
         private volatile bool _isInFocus;
 
-        public Component(RenderEngine renderEngine)
+        public Component(Engine renderEngine)
         {
             ThreadStart threadStart = new ThreadStart(Update);
-
-            RequiresUpdate = false;
 
             _updateThread = new Thread(threadStart);
             _cancellationTokenSource = new CancellationTokenSource();
@@ -76,26 +75,7 @@ namespace RenderLite.Core
 
         public abstract void Draw();
 
-        public bool OnKeypress(ConsoleKeyInfo keyInfo)
-        {
-            if (!IsSelected)
-            {
-                return false;
-            }
-
-            var actionsLookup = IsInFocus
-                ? _focusKeyPressActions
-                : _selectedKeyPressActions;
-
-            if (actionsLookup.TryGetValue(keyInfo.Key, out Action action))
-            {
-                action.Invoke();
-                RequiresUpdate = true;
-                return true;
-            }
-
-            return false;
-        }
+        public abstract bool OnKeypress(ConsoleKeyInfo keyInfo);
 
         public void Dispose()
         {
@@ -106,8 +86,6 @@ namespace RenderLite.Core
 
             _cancellationTokenSource.Cancel();
             _updateThread.Join();
-
-            Console.Clear();
         }
 
         protected abstract void Update();

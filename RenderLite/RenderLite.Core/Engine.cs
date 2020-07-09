@@ -6,9 +6,9 @@ using System.Threading;
 
 namespace RenderLite.Core
 {
-    public class RenderEngine : IDisposable
+    public abstract class Engine : IDisposable
     {
-        private enum ComponentSelection
+        protected enum ComponentSelection
         {
             None,
             Next,
@@ -23,39 +23,40 @@ namespace RenderLite.Core
 
         private readonly CancellationTokenSource _cancellationTokenSource;
         private readonly Thread _renderThread;
-        private readonly Thread _inputThread;
         private readonly List<Component> _components;
         private readonly HashSet<Component> _componentsHash;
         private readonly Stopwatch _stopwatch;
 
         private readonly object _lock;
 
-        public RenderEngine(CancellationTokenSource cancellationTokenSource = null)
+        private volatile bool _triggerWindowRefresh;
+
+        public Engine(CancellationTokenSource cancellationTokenSource = null)
         {
             ThreadStart render = new ThreadStart(Render);
-            ThreadStart input = new ThreadStart(HandleInput);
 
             _cancellationTokenSource = cancellationTokenSource ?? new CancellationTokenSource();
             _renderThread = new Thread(render);
-            _inputThread = new Thread(input);
             _components = new List<Component>();
             _componentsHash = new HashSet<Component>();
             _stopwatch = new Stopwatch();
 
             _lock = new object();
+
+            _triggerWindowRefresh = false;
         }
 
-        public void Begin()
+        public virtual void Begin()
         {
             _renderThread.Start();
-            _inputThread.Start();
             _stopwatch.Start();
         }
 
-        public void Dispose()
+        public virtual void Dispose()
         {
             _cancellationTokenSource.Cancel();
             _renderThread.Join();
+
             _stopwatch.Stop();
 
             List<Component> tempComponents = null;
@@ -91,6 +92,7 @@ namespace RenderLite.Core
                 _componentsHash.Add(component);
             }
 
+            TriggerWindowRefresh();
             SetSelectedComponent();
         }
 
@@ -109,6 +111,7 @@ namespace RenderLite.Core
 
             component.Dispose();
 
+            TriggerWindowRefresh();
             SetSelectedComponent();
         }
 
@@ -130,6 +133,7 @@ namespace RenderLite.Core
                 component.Dispose();
             }
 
+            TriggerWindowRefresh();
             SetSelectedComponent();        
         }
 
@@ -144,14 +148,12 @@ namespace RenderLite.Core
                     tempComponents = new List<Component>(_components);
                 }
 
-                foreach (var component in tempComponents)
+                if (_triggerWindowRefresh)
                 {
-                    if (component.RequiresUpdate)
-                    {
-                        component.RequiresUpdate = false;
-                        component.Draw();
-                    }          
+                    Console.Clear();
                 }
+
+                DrawComponents(_triggerWindowRefresh);
 
                 Console.SetWindowSize(WIDTH, HEIGHT);
                 Console.SetCursorPosition(0, 0);
@@ -169,45 +171,31 @@ namespace RenderLite.Core
             Console.Clear();
         }
 
-        private void HandleInput()
+        private void DrawComponents(bool drawAll)
         {
-            bool exitRequested = false;
+            List<Component> tempComponents = null;
 
-            do
+            lock (_lock)
             {
-                var consoleKeyInfo = Console.ReadKey(false);
-                var selectedComponent = GetSelectedComponent();
+                tempComponents = new List<Component>(_components);
+            }
 
-                if (selectedComponent != null && selectedComponent.OnKeypress(consoleKeyInfo))
-                { 
-                    continue;
-                }
+            _triggerWindowRefresh = false;
 
-                switch (consoleKeyInfo.Key)
+            foreach (var component in tempComponents)
+            {
+                _triggerWindowRefresh |= component.RequiresWindowRefresh;
+
+                if (drawAll || component.RequiresUpdate)
                 {
-                    case ConsoleKey.Escape:
-                        exitRequested = true;
-                        break;
-                    case ConsoleKey.Enter:
-                        if (selectedComponent != null && selectedComponent.IsSelectable)
-                            selectedComponent.IsInFocus = true;
-                        break;
-                    case ConsoleKey.UpArrow:
-                        SetSelectedComponent(ComponentSelection.Previous);
-                        break;
-                    case ConsoleKey.DownArrow:
-                        SetSelectedComponent(ComponentSelection.Next);
-                        break;
-                    default:
-                        break;
+                    component.RequiresWindowRefresh = false;
+                    component.RequiresUpdate = false;
+                    component.Draw();
                 }
             }
-            while (!exitRequested);
-
-            Dispose();
         }
 
-        private void SetSelectedComponent(ComponentSelection selection = ComponentSelection.None)
+        protected void SetSelectedComponent(ComponentSelection selection = ComponentSelection.None)
         {
             List<Component> tempComponents = null;
 
@@ -244,11 +232,10 @@ namespace RenderLite.Core
             }
 
             tempComponents[oldIndex].IsSelected = false;
-            tempComponents[newIndex].IsSelected = true;
-            
+            tempComponents[newIndex].IsSelected = true;        
         }
 
-        private Component GetSelectedComponent()
+        protected Component GetSelectedComponent()
         {
             lock (_lock)
             {
@@ -256,6 +243,11 @@ namespace RenderLite.Core
                     .Where(c => c.IsSelected)
                     .FirstOrDefault();
             }
+        }
+
+        protected void TriggerWindowRefresh()
+        {
+            _triggerWindowRefresh = true;
         }
 
     }

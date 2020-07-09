@@ -6,9 +6,9 @@ namespace RenderLite.Core
 {
     public abstract class Controller
     {
-        protected readonly RenderEngine _renderEngine;
+        protected readonly Engine _renderEngine;
 
-        public Controller(RenderEngine renderEngine)
+        public Controller(Engine renderEngine)
         {
             _renderEngine = renderEngine;
         }
